@@ -117,6 +117,15 @@ public class AkashicLinkItem extends Item {
             serverPlayer.setItemInHand(hand, stack);
         }
 
+        // Handle shift-click for request cancellation/unlinking
+        if (serverPlayer.isShiftKeyDown()) {
+
+            stack.remove(ModComponents.LINK.get());
+            serverPlayer.setItemInHand(hand, stack);
+            sendStatusMessage(serverPlayer, Component.translatable("etherealconvergence.message.link_cleared"), ChatFormatting.YELLOW);
+            return InteractionResult.sidedSuccess(serverPlayer.level().isClientSide);
+
+        }
 
         ModComponents.LinkData currentLink = stack.get(ModComponents.LINK.get());
         if (currentLink == null) {
@@ -187,6 +196,14 @@ public class AkashicLinkItem extends Item {
     }
 
     private InteractionResultHolder<ItemStack> handleShiftClick(ItemStack stack, ServerPlayer player, InteractionHand hand) {
+        // Cancel any active requests first
+        if (ModComponents.hasValidRequest(stack, System.currentTimeMillis())) {
+            stack.remove(ModComponents.REQUEST.get());
+            player.setItemInHand(hand, stack);
+            sendStatusMessage(player, Component.translatable("etherealconvergence.message.request_denied"), ChatFormatting.YELLOW);
+            return InteractionResultHolder.sidedSuccess(stack, player.level().isClientSide);
+        }
+        // If no active request, clear the current link
         if (stack.has(ModComponents.LINK.get())) {
             stack.remove(ModComponents.LINK.get());
             player.setItemInHand(hand, stack);
@@ -220,7 +237,7 @@ public class AkashicLinkItem extends Item {
     private InteractionResult createLink(ItemStack stack, ServerPlayer player, ServerPlayer target, InteractionHand hand) {
         ItemStack targetLink = findLinkInHand(target);
         if (targetLink.isEmpty()) {
-            sendStatusMessage(player, Component.translatable("etherealconvergence.message.no_link"), ChatFormatting.RED);
+            sendStatusMessage(player, Component.translatable("etherealconvergence.message.no_valid_link"), ChatFormatting.RED);
             return InteractionResult.FAIL;
         }
 
@@ -256,7 +273,7 @@ public class AkashicLinkItem extends Item {
 
         ItemStack targetLink = findLinkedItem(target, player.getUUID());
         if (targetLink.isEmpty()) {
-            sendStatusMessage(player, Component.translatable("etherealconvergence.message.not_linked"), ChatFormatting.RED);
+            sendStatusMessage(player, Component.translatable("etherealconvergence.message.no_valid_link"), ChatFormatting.RED);
 
             // Remove link component
             stack.remove(ModComponents.LINK.get());
