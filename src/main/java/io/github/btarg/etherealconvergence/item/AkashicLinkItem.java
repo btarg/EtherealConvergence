@@ -34,6 +34,11 @@ public class AkashicLinkItem extends Item {
         super(props);
     }
 
+    @Override
+    public boolean isEnchantable(ItemStack stack) {
+        return false;
+    }
+
     private static ItemStack findLinkInHand(Player player) {
         if (player.getMainHandItem().is(EtherealConvergence.AKASHIC_LINK.get())) {
             return player.getMainHandItem();

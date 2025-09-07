@@ -17,7 +17,8 @@ public class EtherealConvergence {
     public static final DeferredRegister.Items ITEMS = DeferredRegister.createItems(MODID);
 
     public static final DeferredItem<AkashicLinkItem> AKASHIC_LINK = ITEMS.register("akashic_link",
-            () -> new AkashicLinkItem(new Item.Properties().stacksTo(1).durability(3)));
+            () -> new AkashicLinkItem(new Item.Properties().stacksTo(1)
+                    .durability(3)));
 
     public EtherealConvergence(IEventBus modEventBus, ModContainer modContainer) {
         ModComponents.register(modEventBus);
