@@ -1,7 +1,9 @@
-package io.github.btarg.etherealconvergence;
+package io.github.btarg.etherealconvergence.item;
 
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
+import io.github.btarg.etherealconvergence.EtherealConvergence;
+import io.github.btarg.etherealconvergence.config.EtherealConvergenceConfig;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.core.registries.Registries;
@@ -79,6 +81,12 @@ public class ModComponents {
     public static boolean hasValidRequest(net.minecraft.world.item.ItemStack stack, long now) {
         RequestData req = stack.get(REQUEST.get());
         if (req == null) return false;
-        return now - req.time() <= 10_000; // 10 seconds
+        return now - req.time() <= EtherealConvergenceConfig.getRequestTimeoutTicks();
+    }
+
+    public static boolean hasValidRequestTicks(net.minecraft.world.item.ItemStack stack, long currentTick) {
+        RequestData req = stack.get(REQUEST.get());
+        if (req == null) return false;
+        return currentTick - req.time() <= EtherealConvergenceConfig.getRequestTimeoutTicks();
     }
 }

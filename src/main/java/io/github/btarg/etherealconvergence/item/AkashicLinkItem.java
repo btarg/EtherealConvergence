@@ -1,7 +1,7 @@
 package io.github.btarg.etherealconvergence.item;
 
 import io.github.btarg.etherealconvergence.EtherealConvergence;
-import io.github.btarg.etherealconvergence.ModComponents;
+import io.github.btarg.etherealconvergence.config.EtherealConvergenceConfig;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -28,10 +28,6 @@ import java.util.UUID;
 import java.util.stream.Stream;
 
 public class AkashicLinkItem extends Item {
-
-    private static final long CONFIRMATION_TIMEOUT = 3000L;
-    private static final long REQUEST_TIMEOUT = 10_000L;
-    private static final int TELEPORT_COOLDOWN_TICKS = 100;
 
     public AkashicLinkItem(Properties props) {
         super(props);
@@ -67,13 +63,13 @@ public class AkashicLinkItem extends Item {
 
     @Override
     public boolean isFoil(@Nonnull ItemStack stack) {
-        return ModComponents.hasValidRequest(stack, System.currentTimeMillis());
+        return ModComponents.hasValidRequestTicks(stack, getCurrentTick());
     }
 
     @Override
     @Nonnull
     public Component getName(@Nonnull ItemStack stack) {
-        boolean hasIncomingRequest = ModComponents.hasValidRequest(stack, System.currentTimeMillis());
+        boolean hasIncomingRequest = ModComponents.hasValidRequestTicks(stack, getCurrentTick());
         ModComponents.LinkData link = stack.get(ModComponents.LINK.get());
 
         ChatFormatting style;
@@ -90,7 +86,7 @@ public class AkashicLinkItem extends Item {
     @Override
     public void appendHoverText(@Nonnull ItemStack stack, @Nonnull TooltipContext context, @Nonnull List<Component> tooltipComponents, @Nonnull TooltipFlag tooltipFlag) {
 
-        if (ModComponents.hasValidRequest(stack, System.currentTimeMillis())) {
+        if (ModComponents.hasValidRequestTicks(stack, getCurrentTick())) {
             tooltipComponents.add(Component.translatable("item.etherealconvergence.incoming").withStyle(ChatFormatting.DARK_PURPLE));
         }
 
@@ -161,7 +157,7 @@ public class AkashicLinkItem extends Item {
             return handleShiftClick(stack, serverPlayer, hand);
         }
 
-        if (ModComponents.hasValidRequest(stack, System.currentTimeMillis())) {
+        if (ModComponents.hasValidRequestTicks(stack, getCurrentTick())) {
             return acceptRequest(serverPlayer, stack, hand, (ServerLevel) level, player.blockPosition())
                     ? InteractionResultHolder.sidedSuccess(stack, player.level().isClientSide)
                     : InteractionResultHolder.fail(stack);
@@ -199,7 +195,7 @@ public class AkashicLinkItem extends Item {
 
     private InteractionResultHolder<ItemStack> handleShiftClick(ItemStack stack, ServerPlayer player, InteractionHand hand) {
         // Cancel any active requests first
-        if (ModComponents.hasValidRequest(stack, System.currentTimeMillis())) {
+        if (ModComponents.hasValidRequestTicks(stack, getCurrentTick())) {
             stack.remove(ModComponents.REQUEST.get());
             player.setItemInHand(hand, stack);
             sendStatusMessage(player, Component.translatable("etherealconvergence.message.request_denied"), ChatFormatting.YELLOW);
@@ -225,7 +221,7 @@ public class AkashicLinkItem extends Item {
     private InteractionResult handleRelink(ItemStack stack, ServerPlayer player, ServerPlayer target) {
         ModComponents.ConfirmationData confirmation = stack.get(ModComponents.CONFIRMATION.get());
 
-        if (confirmation != null && confirmation.targetUUID().equals(target.getUUID().toString()) && System.currentTimeMillis() - confirmation.time() <= CONFIRMATION_TIMEOUT) {
+        if (confirmation != null && confirmation.targetUUID().equals(target.getUUID().toString()) && System.currentTimeMillis() - confirmation.time() <= EtherealConvergenceConfig.getConfirmationTimeout()) {
             stack.remove(ModComponents.CONFIRMATION.get());
             return createLink(stack, player, target, player.getUsedItemHand());
         } else {
@@ -284,17 +280,17 @@ public class AkashicLinkItem extends Item {
             return InteractionResultHolder.fail(stack);
         }
 
-        if (ModComponents.hasValidRequest(targetLink, System.currentTimeMillis())) {
+        if (ModComponents.hasValidRequestTicks(targetLink, getCurrentTick())) {
             sendStatusMessage(player, Component.translatable("etherealconvergence.message.request_pending"), ChatFormatting.YELLOW);
             return InteractionResultHolder.fail(stack);
         }
 
-        targetLink.set(ModComponents.REQUEST.get(), new ModComponents.RequestData(player.getUUID().toString(), System.currentTimeMillis()));
+        targetLink.set(ModComponents.REQUEST.get(), new ModComponents.RequestData(player.getUUID().toString(), getCurrentTick()));
         sendStatusMessage(player, Component.translatable("etherealconvergence.message.request_sent", link.name()), ChatFormatting.GREEN);
         sendStatusMessage(target, Component.translatable("etherealconvergence.message.request_incoming", player.getGameProfile().getName()), ChatFormatting.AQUA);
 
-        // Request timeout is in milliseconds, cooldown is in ticks
-        player.getCooldowns().addCooldown(stack.getItem(), Math.max(0, (int)REQUEST_TIMEOUT / 50));
+        // Use config value for request timeout cooldown
+        player.getCooldowns().addCooldown(stack.getItem(), EtherealConvergenceConfig.getRequestTimeoutTicks());
 
         return InteractionResultHolder.success(stack);
     }
@@ -303,7 +299,7 @@ public class AkashicLinkItem extends Item {
         ModComponents.RequestData req = linkItemStack.get(ModComponents.REQUEST.get());
         if (req == null) return false;
 
-        if (System.currentTimeMillis() - req.time() > REQUEST_TIMEOUT) {
+        if (getCurrentTick() - req.time() > EtherealConvergenceConfig.getRequestTimeoutTicks()) {
             linkItemStack.remove(ModComponents.REQUEST.get());
             sendStatusMessage(acceptingPlayer, Component.translatable("etherealconvergence.message.request_expired"), ChatFormatting.RED);
             return false;
@@ -332,7 +328,7 @@ public class AkashicLinkItem extends Item {
         acceptingPlayer.setItemInHand(hand, linkItemStack);
 
         linkItemStack.hurtAndBreak(1, acceptingPlayer, slot);
-        requester.getCooldowns().addCooldown(this, TELEPORT_COOLDOWN_TICKS);
+        requester.getCooldowns().addCooldown(this, EtherealConvergenceConfig.getTeleportCooldownTicks());
 
 
         return true;
@@ -350,6 +346,11 @@ public class AkashicLinkItem extends Item {
             return true;
         }
         return false;
+    }
+
+    private static long getCurrentTick() {
+        // For now, convert current time to approximate ticks (50ms per tick)
+        return System.currentTimeMillis() / 50;
     }
 
 }

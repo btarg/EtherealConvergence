@@ -1,6 +1,7 @@
 package io.github.btarg.etherealconvergence;
 
 import io.github.btarg.etherealconvergence.item.AkashicLinkItem;
+import io.github.btarg.etherealconvergence.item.ModComponents;
 import net.minecraft.world.item.Item;
 import net.neoforged.bus.api.IEventBus;
 import net.neoforged.fml.ModContainer;
@@ -21,6 +22,12 @@ public class EtherealConvergence {
     public EtherealConvergence(IEventBus modEventBus, ModContainer modContainer) {
         ModComponents.register(modEventBus);
         ITEMS.register(modEventBus);
+
+        modContainer.registerConfig(
+                net.neoforged.fml.config.ModConfig.Type.COMMON,
+                io.github.btarg.etherealconvergence.config.EtherealConvergenceConfig.CONFIG_SPEC
+        );
     }
+
 
 }
