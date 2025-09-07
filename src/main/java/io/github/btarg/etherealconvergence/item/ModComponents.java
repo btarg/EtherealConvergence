@@ -78,11 +78,6 @@ public class ModComponents {
         REGISTER.register(bus);
     }
 
-    public static boolean hasValidRequest(net.minecraft.world.item.ItemStack stack, long now) {
-        RequestData req = stack.get(REQUEST.get());
-        if (req == null) return false;
-        return now - req.time() <= EtherealConvergenceConfig.getRequestTimeoutTicks();
-    }
 
     public static boolean hasValidRequestTicks(net.minecraft.world.item.ItemStack stack, long currentTick) {
         RequestData req = stack.get(REQUEST.get());
