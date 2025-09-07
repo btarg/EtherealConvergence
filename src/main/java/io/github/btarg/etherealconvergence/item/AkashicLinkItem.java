@@ -8,6 +8,8 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.sounds.SoundEvents;
+import net.minecraft.sounds.SoundSource;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.InteractionResult;
 import net.minecraft.world.InteractionResultHolder;
@@ -297,36 +299,41 @@ public class AkashicLinkItem extends Item {
         return InteractionResultHolder.success(stack);
     }
 
-    private boolean acceptRequest(ServerPlayer target, ItemStack linkItemStack, InteractionHand hand, ServerLevel level, BlockPos pos) {
+    private boolean acceptRequest(ServerPlayer acceptingPlayer, ItemStack linkItemStack, InteractionHand hand, ServerLevel level, BlockPos pos) {
         ModComponents.RequestData req = linkItemStack.get(ModComponents.REQUEST.get());
         if (req == null) return false;
 
         if (System.currentTimeMillis() - req.time() > REQUEST_TIMEOUT) {
             linkItemStack.remove(ModComponents.REQUEST.get());
-            sendStatusMessage(target, Component.translatable("etherealconvergence.message.request_expired"), ChatFormatting.RED);
+            sendStatusMessage(acceptingPlayer, Component.translatable("etherealconvergence.message.request_expired"), ChatFormatting.RED);
             return false;
         }
 
         ServerPlayer requester = level.getServer().getPlayerList().getPlayer(UUID.fromString(req.requester()));
         if (requester == null) {
             linkItemStack.remove(ModComponents.REQUEST.get());
-            sendStatusMessage(target, Component.translatable("etherealconvergence.message.requester_offline"), ChatFormatting.RED);
+            sendStatusMessage(acceptingPlayer, Component.translatable("etherealconvergence.message.requester_offline"), ChatFormatting.RED);
             return false;
         }
 
-        sendStatusMessage(requester, Component.translatable("etherealconvergence.message.tp_success_to", target.getGameProfile().getName()), ChatFormatting.GREEN);
-        sendStatusMessage(target, Component.translatable("etherealconvergence.message.request_accepted"), ChatFormatting.GREEN);
+        sendStatusMessage(requester, Component.translatable("etherealconvergence.message.tp_success_to", acceptingPlayer.getGameProfile().getName()), ChatFormatting.GREEN);
+        sendStatusMessage(acceptingPlayer, Component.translatable("etherealconvergence.message.request_accepted"), ChatFormatting.GREEN);
 
 
-        requester.teleportTo(level, pos.getX(), pos.getY(), pos.getZ(), target.getYRot(), target.getXRot());
+        requester.teleportTo(level, pos.getX(), pos.getY(), pos.getZ(), acceptingPlayer.getYRot(), acceptingPlayer.getXRot());
 
+        // Play ender pearl sound
+        level.playSound(requester, pos, SoundEvents.PLAYER_TELEPORT, SoundSource.PLAYERS, 1.0F, 1.0F);
 
         EquipmentSlot slot = hand == InteractionHand.MAIN_HAND ? EquipmentSlot.MAINHAND : EquipmentSlot.OFFHAND;
-        linkItemStack.hurtAndBreak(1, target, slot);
+
+        // Update components before modifying the stack
+        linkItemStack.remove(ModComponents.REQUEST.get());
+        acceptingPlayer.setItemInHand(hand, linkItemStack);
+
+        linkItemStack.hurtAndBreak(1, acceptingPlayer, slot);
         requester.getCooldowns().addCooldown(this, TELEPORT_COOLDOWN_TICKS);
 
-        linkItemStack.remove(ModComponents.REQUEST.get());
-        target.setItemInHand(hand, linkItemStack);
 
         return true;
     }
