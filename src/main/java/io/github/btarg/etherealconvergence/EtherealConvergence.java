@@ -2,10 +2,13 @@ package io.github.btarg.etherealconvergence;
 
 import io.github.btarg.etherealconvergence.item.AkashicLinkItem;
 import io.github.btarg.etherealconvergence.item.ModComponents;
+import net.minecraft.world.item.CreativeModeTabs;
 import net.minecraft.world.item.Item;
 import net.neoforged.bus.api.IEventBus;
+import net.neoforged.bus.api.SubscribeEvent;
 import net.neoforged.fml.ModContainer;
 import net.neoforged.fml.common.Mod;
+import net.neoforged.neoforge.event.BuildCreativeModeTabContentsEvent;
 import net.neoforged.neoforge.registries.DeferredItem;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
@@ -24,11 +27,20 @@ public class EtherealConvergence {
         ModComponents.register(modEventBus);
         ITEMS.register(modEventBus);
 
+        modEventBus.register(this);
+
         modContainer.registerConfig(
                 net.neoforged.fml.config.ModConfig.Type.COMMON,
                 io.github.btarg.etherealconvergence.config.EtherealConvergenceConfig.CONFIG_SPEC
         );
     }
 
+    @SubscribeEvent
+    private void buildContents(BuildCreativeModeTabContentsEvent event) {
+        // Is this the tab we want to add to?
+        if (event.getTabKey() == CreativeModeTabs.TOOLS_AND_UTILITIES) {
+            event.accept(AKASHIC_LINK);
+        }
+    }
 
 }

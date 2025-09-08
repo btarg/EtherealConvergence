@@ -16,5 +16,6 @@
   "etherealconvergence.message.request_accepted": "Teleport request accepted.",
   "etherealconvergence.message.request_denied": "Teleport request denied.",
   "etherealconvergence.message.confirm_relink": "Interact again to re-link with %s.",
-  "etherealconvergence.message.cannot_link_self": "You cannot link to yourself."
+  "etherealconvergence.message.cannot_link_self": "You cannot link to yourself.",
+  "etherealconvergence.message.link_broken": "Your link to %s was broken."
 }

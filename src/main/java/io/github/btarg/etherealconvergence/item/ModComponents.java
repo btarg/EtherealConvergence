@@ -9,6 +9,7 @@ import net.minecraft.core.component.DataComponentType;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
+import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
 import java.util.function.Supplier;
@@ -78,10 +79,4 @@ public class ModComponents {
         REGISTER.register(bus);
     }
 
-
-    public static boolean hasValidRequestTicks(net.minecraft.world.item.ItemStack stack, long currentTick) {
-        RequestData req = stack.get(REQUEST.get());
-        if (req == null) return false;
-        return currentTick - req.time() <= EtherealConvergenceConfig.getRequestTimeoutTicks();
-    }
 }
