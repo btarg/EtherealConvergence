@@ -26,6 +26,7 @@ import net.minecraft.world.level.Level;
 import javax.annotation.Nonnull;
 import java.util.List;
 import java.util.Objects;
+import java.util.Set;
 import java.util.UUID;
 import java.util.stream.Stream;
 
@@ -111,7 +112,7 @@ public class AkashicLinkItem extends Item {
     }
 
     private boolean hasValidRequestTicksClient(ItemStack stack, long currentTick) {
-        ModComponents.RequestData req = stack.get(ModComponents.REQUEST.get());
+        ModComponents.RequestData req = stack.get(ModComponents.INCOMING_REQUEST.get());
         if (req == null) return false;
         return currentTick - req.time() <= EtherealConvergenceConfig.getRequestTimeoutTicks();
     }
@@ -170,15 +171,15 @@ public class AkashicLinkItem extends Item {
         // Check for self-link and remove it first
         checkAndRemoveSelfLink(stack, player);
 
-        // Handle shift-click for request cancellation/unlinking
-        if (player.isShiftKeyDown()) {
-            if (player instanceof ServerPlayer serverPlayer) {
-                removeComponent(stack, player, ModComponents.LINK.get());
-                sendStatusMessage(serverPlayer, Component.translatable("etherealconvergence.message.unlinked", ""), ChatFormatting.YELLOW);
-            }
-
-            return InteractionResult.sidedSuccess(player.level().isClientSide);
-        }
+//        // Handle shift-click for request cancellation/unlinking
+//        if (player.isShiftKeyDown()) {
+//            if (player instanceof ServerPlayer serverPlayer) {
+//                removeComponent(stack, player, ModComponents.LINK.get());
+//                sendStatusMessage(serverPlayer, Component.translatable("etherealconvergence.message.unlinked", ""), ChatFormatting.YELLOW);
+//            }
+//
+//            return InteractionResult.sidedSuccess(player.level().isClientSide);
+//        }
 
         ModComponents.LinkData currentLink = stack.get(ModComponents.LINK.get());
         if (currentLink == null) {
@@ -237,19 +238,28 @@ public class AkashicLinkItem extends Item {
         // Check for self-link and remove it first
         checkAndRemoveSelfLink(stack, player);
 
-        if (player.isShiftKeyDown()) {
-            return handleShiftClick(stack, player);
-        }
+//        if (player.isShiftKeyDown()) {
+//            return handleShiftClick(stack, player);
+//        }
 
         if (!(player instanceof ServerPlayer serverPlayer)) {
             return InteractionResultHolder.success(stack);
         }
 
-        ModComponents.RequestData req = stack.get(ModComponents.REQUEST.get());
+        ModComponents.RequestData req = stack.get(ModComponents.INCOMING_REQUEST.get());
 
-        if (checkRequestValid(req)) return sendRequest(stack, player);
+        // If we don't have a request then send one
+        if (!checkRequestValid(req)) return sendRequest(stack, player);
 
-        return acceptRequest(req, serverPlayer, stack, serverPlayer.serverLevel(), player.blockPosition())
+        // Bring the requesting player here
+        if (req.type().equals(ModComponents.ERequestType.BRING_REQUESTER_HERE)) {
+            return acceptTeleportHereRequest(req, serverPlayer, stack, serverPlayer.serverLevel(), player.blockPosition())
+                    ? InteractionResultHolder.sidedSuccess(stack, player.level().isClientSide)
+                    : InteractionResultHolder.fail(stack);
+        }
+
+        // Go to the requesting player
+        return acceptTeleportToRequest(req, player, stack, level)
                 ? InteractionResultHolder.sidedSuccess(stack, player.level().isClientSide)
                 : InteractionResultHolder.fail(stack);
 
@@ -267,24 +277,90 @@ public class AkashicLinkItem extends Item {
         // Check for self-link and remove it first
         checkAndRemoveSelfLink(stack, player);
 
-        ModComponents.RequestData req = stack.get(ModComponents.REQUEST.get());
+        ModComponents.RequestData req = stack.get(ModComponents.INCOMING_REQUEST.get());
         if (req == null) return InteractionResult.PASS;
 
-        // Teleport on top of the block if there is space, otherwise act like a Spawn Egg
-        BlockPos clickedPos = ctx.getClickedPos();
-        BlockPos abovePos = clickedPos.above();
-        BlockPos newPos = level.isEmptyBlock(abovePos) ? abovePos : (level.getBlockState(clickedPos).getCollisionShape(level, clickedPos).isEmpty()
-                ? clickedPos : clickedPos.relative(ctx.getClickedFace()));
-        if (!Level.isInSpawnableBounds(newPos)) return InteractionResult.FAIL;
+        // Bring the requesting player here
+        if (req.type().equals(ModComponents.ERequestType.BRING_REQUESTER_HERE)) {
 
-        return acceptRequest(req, player, stack, level, newPos)
+            // Teleport on top of the block if there is space, otherwise act like a Spawn Egg
+            BlockPos clickedPos = ctx.getClickedPos();
+            BlockPos abovePos = clickedPos.above();
+            BlockPos newPos = level.isEmptyBlock(abovePos) ? abovePos : (level.getBlockState(clickedPos).getCollisionShape(level, clickedPos).isEmpty()
+                    ? clickedPos : clickedPos.relative(ctx.getClickedFace()));
+            if (!Level.isInSpawnableBounds(newPos)) return InteractionResult.FAIL;
+
+            return acceptTeleportHereRequest(req, player, stack, level, newPos)
+                    ? InteractionResult.sidedSuccess(player.level().isClientSide)
+                    : InteractionResult.FAIL;
+
+        }
+
+        // Go to the requesting player
+        return acceptTeleportToRequest(req, player, stack, level)
                 ? InteractionResult.sidedSuccess(player.level().isClientSide)
                 : InteractionResult.FAIL;
     }
 
+    private void handleOfflineFail(ItemStack linkItemStack, Player player) {
+        removeComponent(linkItemStack, player, ModComponents.INCOMING_REQUEST.get());
+        sendStatusMessage(player, Component.translatable("etherealconvergence.message.requester_offline"), ChatFormatting.RED);
+    }
+
+    private boolean acceptTeleportToRequest(ModComponents.RequestData requestData, Player acceptingPlayer, ItemStack linkItemStack, Level level) {
+
+        if (!(level instanceof ServerLevel serverLevel)) {
+            handleOfflineFail(linkItemStack, acceptingPlayer);
+            return false;
+        }
+
+        ServerPlayer requester = serverLevel.getServer().getPlayerList().getPlayer(UUID.fromString(requestData.requester()));
+        if (requester == null) {
+            handleOfflineFail(linkItemStack, acceptingPlayer);
+            return false;
+        }
+
+        if (requester.level() != serverLevel) {
+            handleOfflineFail(linkItemStack, acceptingPlayer);
+            return false;
+        }
+
+        // Cast accepting player to ServerPlayer for teleportation
+        if (!(acceptingPlayer instanceof ServerPlayer serverAcceptingPlayer)) {
+            removeComponent(linkItemStack, acceptingPlayer, ModComponents.INCOMING_REQUEST.get());
+            return false;
+        }
+
+        sendStatusMessage(requester, Component.translatable("etherealconvergence.message.request_accepted"), ChatFormatting.GREEN);
+        sendStatusMessage(acceptingPlayer, Component.translatable("etherealconvergence.message.tp_success_to", requester.getGameProfile().getName()), ChatFormatting.GREEN);
+
+        // Teleport the accepting player to the requester's location
+        BlockPos requesterPos = requester.blockPosition();
+
+        // Empty set provided to avoid interpolation when teleporting
+        serverAcceptingPlayer.teleportTo(serverLevel, requesterPos.getX(), requesterPos.getY(), requesterPos.getZ(), Set.of(), serverAcceptingPlayer.getYRot(), serverAcceptingPlayer.getXRot());
+        serverAcceptingPlayer.lookAt(net.minecraft.commands.arguments.EntityAnchorArgument.Anchor.EYES, requester.getEyePosition());
+        serverLevel.playSound(serverAcceptingPlayer, requesterPos, SoundEvents.PLAYER_TELEPORT, SoundSource.PLAYERS, 1.0F, 1.0F);
+
+        removeComponent(linkItemStack, acceptingPlayer, ModComponents.INCOMING_REQUEST.get());
+
+        ItemStack requesterLinkStack = findLinkedItem(requester, acceptingPlayer.getUUID());
+        ItemStack acceptingLinkStack = findLinkInHand(acceptingPlayer);
+        if (!acceptingLinkStack.isEmpty()) {
+            acceptingLinkStack.getItem().damageItem(acceptingLinkStack, 1, serverAcceptingPlayer, p -> {
+                // Sever the link for the requester
+                removeComponent(requesterLinkStack, requester, ModComponents.LINK.get());
+                sendStatusMessage(requester, Component.translatable("etherealconvergence.message.link_broken", acceptingPlayer.getGameProfile().getName()), ChatFormatting.RED);
+            });
+        }
+        serverAcceptingPlayer.getCooldowns().addCooldown(this, EtherealConvergenceConfig.getTeleportCooldownTicks());
+
+        return true;
+    }
+
     private InteractionResultHolder<ItemStack> handleShiftClick(ItemStack stack, Player player) {
         if (!player.level().isClientSide) {
-            ModComponents.RequestData req = stack.get(ModComponents.REQUEST.get());
+            ModComponents.RequestData req = stack.get(ModComponents.INCOMING_REQUEST.get());
 
             // Cancel any active requests first
             if (req != null) {
@@ -295,7 +371,7 @@ public class AkashicLinkItem extends Item {
 
                 sendStatusMessage(player, Component.translatable("etherealconvergence.message.request_denied"), ChatFormatting.YELLOW);
 
-                removeComponent(stack, player, ModComponents.REQUEST.get());
+                removeComponent(stack, player, ModComponents.INCOMING_REQUEST.get());
 
                 return InteractionResultHolder.sidedSuccess(stack, player.level().isClientSide);
             }
@@ -344,7 +420,7 @@ public class AkashicLinkItem extends Item {
         }
 
 
-        ModComponents.RequestData requestData = targetLink.get(ModComponents.REQUEST.get());
+        ModComponents.RequestData requestData = targetLink.get(ModComponents.INCOMING_REQUEST.get());
         if (checkRequestValid(requestData)) {
             sendStatusMessage(player, Component.translatable("etherealconvergence.message.request_pending"), ChatFormatting.YELLOW);
             return InteractionResultHolder.fail(linkItemStack);
@@ -354,11 +430,22 @@ public class AkashicLinkItem extends Item {
             return InteractionResultHolder.fail(linkItemStack);
         }
 
-        // Overwrite any existing request
-        setComponent(targetLink, target, ModComponents.REQUEST.get(), new ModComponents.RequestData(player.getUUID().toString(), getCurrentTick()));
+        // Adds a request component to the other player (target)'s link item.
+        // If we are not holding shift, we want to teleport to them, otherwise we want them to come to us.
+        ModComponents.ERequestType requestType = player.isShiftKeyDown() ?
+                ModComponents.ERequestType.TP_TO_REQUESTER
+                : ModComponents.ERequestType.BRING_REQUESTER_HERE;
+
+        setComponent(targetLink, target, ModComponents.INCOMING_REQUEST.get(), new ModComponents.RequestData(player.getUUID().toString(), getCurrentTick(), requestType));
 
         sendStatusMessage(serverPlayer, Component.translatable("etherealconvergence.message.request_sent", link.name()), ChatFormatting.GREEN);
-        sendStatusMessage(target, Component.translatable("etherealconvergence.message.request_incoming", player.getGameProfile().getName()), ChatFormatting.AQUA);
+
+        if (requestType.equals(ModComponents.ERequestType.BRING_REQUESTER_HERE)) {
+            sendStatusMessage(target, Component.translatable("etherealconvergence.message.request_incoming", player.getGameProfile().getName()), ChatFormatting.AQUA);
+        } else {
+            sendStatusMessage(target, Component.translatable("etherealconvergence.message.request_incoming_tp", player.getGameProfile().getName()), ChatFormatting.AQUA);
+        }
+
 
         serverPlayer.getCooldowns().addCooldown(linkItemStack.getItem(), EtherealConvergenceConfig.getRequestTimeoutTicks());
 
@@ -371,17 +458,17 @@ public class AkashicLinkItem extends Item {
         return getCurrentTick() - requestData.time() <= EtherealConvergenceConfig.getRequestTimeoutTicks();
     }
 
-    private boolean acceptRequest(ModComponents.RequestData requestData, Player acceptingPlayer, ItemStack linkItemStack, Level level, BlockPos pos) {
+    private boolean acceptTeleportHereRequest(ModComponents.RequestData requestData, Player acceptingPlayer, ItemStack linkItemStack, Level level, BlockPos pos) {
 
         if (!(level instanceof ServerLevel serverLevel)) {
             sendStatusMessage(acceptingPlayer, Component.translatable("etherealconvergence.message.requester_offline"), ChatFormatting.RED);
-            removeComponent(linkItemStack, acceptingPlayer, ModComponents.REQUEST.get());
+            removeComponent(linkItemStack, acceptingPlayer, ModComponents.INCOMING_REQUEST.get());
             return false;
         }
 
         ServerPlayer requester = serverLevel.getServer().getPlayerList().getPlayer(UUID.fromString(requestData.requester()));
         if (requester == null) {
-            removeComponent(linkItemStack, acceptingPlayer, ModComponents.REQUEST.get());
+            removeComponent(linkItemStack, acceptingPlayer, ModComponents.INCOMING_REQUEST.get());
             sendStatusMessage(acceptingPlayer, Component.translatable("etherealconvergence.message.requester_offline"), ChatFormatting.RED);
             return false;
         }
@@ -389,12 +476,12 @@ public class AkashicLinkItem extends Item {
         sendStatusMessage(requester, Component.translatable("etherealconvergence.message.tp_success_to", acceptingPlayer.getGameProfile().getName()), ChatFormatting.GREEN);
         sendStatusMessage(acceptingPlayer, Component.translatable("etherealconvergence.message.request_accepted"), ChatFormatting.GREEN);
 
-        requester.teleportTo(serverLevel, pos.getX(), pos.getY(), pos.getZ(), requester.getYRot(), requester.getXRot());
+        // Empty set provided to avoid interpolation when teleporting
+        requester.teleportTo(serverLevel, pos.getX(), pos.getY(), pos.getZ(), Set.of(), requester.getYRot(), requester.getXRot());
         requester.lookAt(net.minecraft.commands.arguments.EntityAnchorArgument.Anchor.EYES, acceptingPlayer.getEyePosition());
-
         level.playSound(requester, pos, SoundEvents.PLAYER_TELEPORT, SoundSource.PLAYERS, 1.0F, 1.0F);
 
-        removeComponent(linkItemStack, acceptingPlayer, ModComponents.REQUEST.get());
+        removeComponent(linkItemStack, acceptingPlayer, ModComponents.INCOMING_REQUEST.get());
 
         ItemStack requesterLinkStack = findLinkedItem(requester, acceptingPlayer.getUUID());
         ItemStack acceptingLinkStack = findLinkInHand(acceptingPlayer);

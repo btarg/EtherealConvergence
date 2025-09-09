@@ -10,6 +10,7 @@
   "etherealconvergence.message.request_sent": "Request sent to %s",
   "etherealconvergence.message.request_pending": "A teleport request is already pending.",
   "etherealconvergence.message.request_incoming": "%s wants to teleport to you.",
+  "etherealconvergence.message.request_incoming_tp": "%s wants to teleport you to their location.",
   "etherealconvergence.message.request_expired": "Teleport request expired.",
   "etherealconvergence.message.requester_offline": "Requester is no longer online.",
   "etherealconvergence.message.tp_success_to": "Teleported to %s",

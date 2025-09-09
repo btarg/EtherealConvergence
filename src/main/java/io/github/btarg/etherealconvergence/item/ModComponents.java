@@ -3,13 +3,11 @@ package io.github.btarg.etherealconvergence.item;
 import com.mojang.serialization.Codec;
 import com.mojang.serialization.codecs.RecordCodecBuilder;
 import io.github.btarg.etherealconvergence.EtherealConvergence;
-import io.github.btarg.etherealconvergence.config.EtherealConvergenceConfig;
 import io.netty.buffer.ByteBuf;
 import net.minecraft.core.component.DataComponentType;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.codec.ByteBufCodecs;
 import net.minecraft.network.codec.StreamCodec;
-import net.minecraft.world.item.ItemStack;
 import net.neoforged.neoforge.registries.DeferredRegister;
 
 import java.util.function.Supplier;
@@ -38,20 +36,38 @@ public class ModComponents {
                     .networkSynchronized(LINK_STREAM_CODEC));
 
     // --- Request Data ---
-    public record RequestData(String requester, long time) {}
+    public enum ERequestType {
+        BRING_REQUESTER_HERE(0),
+        TP_TO_REQUESTER(1);
 
-    public static final Codec<RequestData> REQUEST_CODEC = RecordCodecBuilder.create(inst -> inst.group(
+        public final int index;
+
+        ERequestType(int index) {
+            this.index = index;
+        }
+
+        public static ERequestType fromIndex(int index) {
+            return values()[index];
+        }
+    }
+
+    public record RequestData(String requester, long time, ERequestType type) {}
+
+    public static final Codec<RequestData> REQUEST_CODEC = RecordCodecBuilder.create(instance -> instance.group(
             Codec.STRING.fieldOf("requester").forGetter(RequestData::requester),
-            Codec.LONG.fieldOf("time").forGetter(RequestData::time)
-    ).apply(inst, RequestData::new));
+            Codec.LONG.fieldOf("time").forGetter(RequestData::time),
+            Codec.INT.fieldOf("type").forGetter(data -> data.type.index)
+    ).apply(instance, (requester, time, typeIndex) -> new RequestData(requester, time, ERequestType.fromIndex(typeIndex))));
 
     public static final StreamCodec<ByteBuf, RequestData> REQUEST_STREAM_CODEC = StreamCodec.composite(
             ByteBufCodecs.STRING_UTF8, RequestData::requester,
             ByteBufCodecs.VAR_LONG, RequestData::time,
+            ByteBufCodecs.VAR_INT.map(ERequestType::fromIndex, type -> type.index), RequestData::type,
             RequestData::new
     );
 
-    public static final Supplier<DataComponentType<RequestData>> REQUEST =
+    // This component is added to the target player's Link item when sending a teleport request.
+    public static final Supplier<DataComponentType<RequestData>> INCOMING_REQUEST =
             REGISTER.registerComponentType("request", builder -> builder
                     .persistent(REQUEST_CODEC)
                     .networkSynchronized(REQUEST_STREAM_CODEC));
