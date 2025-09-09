@@ -1,13 +1,14 @@
 {
   "item.etherealconvergence.akashic_link": "Akashic Link Crystal",
   "item.etherealconvergence.unlinked": "Unlinked",
-  "item.etherealconvergence.incoming": "Incoming teleport request",
-  "etherealconvergence.message.linked": "Linked with %s.",
-  "etherealconvergence.message.unlinked": "Unlinked from %s.",
+  "item.etherealconvergence.incoming": "Incoming request: %s",
+  "etherealconvergence.message.linked": "Linked with %s",
+  "etherealconvergence.message.unlinked": "Unlinked from %s",
   "etherealconvergence.message.not_linked": "Not linked to any player.",
   "etherealconvergence.message.offline": "Linked player is offline.",
   "etherealconvergence.message.no_valid_link": "Target has no valid link.",
-  "etherealconvergence.message.request_sent": "Request sent to %s.",
+  "etherealconvergence.message.request_sent_tpa": "Request to teleport to %s sent.",
+  "etherealconvergence.message.request_sent_tpa_here": "Request to teleport %s here sent.",
   "etherealconvergence.message.request_pending": "A teleport request is already pending.",
   "etherealconvergence.message.request_incoming": "%s wants to teleport to you.",
   "etherealconvergence.message.request_incoming_tp": "%s wants to bring you to their location.",
@@ -16,6 +17,5 @@
   "etherealconvergence.message.request_accepted": "Teleport request accepted.",
   "etherealconvergence.message.request_denied": "Teleport request denied.",
   "etherealconvergence.message.confirm_relink": "Interact again to re-link with %s.",
-  "etherealconvergence.message.cannot_link_self": "You cannot link to yourself.",
   "etherealconvergence.message.link_broken": "Your link to %s was broken."
 }

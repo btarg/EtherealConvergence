@@ -29,12 +29,12 @@ public class ModComponents {
                     .persistent(LINK_CODEC)
                     .networkSynchronized(LINK_STREAM_CODEC));
     public static final Codec<RequestData> REQUEST_CODEC = RecordCodecBuilder.create(instance -> instance.group(
-            Codec.STRING.fieldOf("requester").forGetter(RequestData::requester),
+            Codec.STRING.fieldOf("requester").forGetter(RequestData::requesterUUID),
             Codec.LONG.fieldOf("time").forGetter(RequestData::time),
             Codec.INT.fieldOf("type").forGetter(data -> data.type.index)
     ).apply(instance, (requester, time, typeIndex) -> new RequestData(requester, time, ERequestType.fromIndex(typeIndex))));
     public static final StreamCodec<ByteBuf, RequestData> REQUEST_STREAM_CODEC = StreamCodec.composite(
-            ByteBufCodecs.STRING_UTF8, RequestData::requester,
+            ByteBufCodecs.STRING_UTF8, RequestData::requesterUUID,
             ByteBufCodecs.VAR_LONG, RequestData::time,
             ByteBufCodecs.VAR_INT.map(ERequestType::fromIndex, type -> type.index), RequestData::type,
             RequestData::new
@@ -82,7 +82,7 @@ public class ModComponents {
     public record LinkData(String linkedUUID, String name) {
     }
 
-    public record RequestData(String requester, long time, ERequestType type) {
+    public record RequestData(String requesterUUID, long time, ERequestType type) {
     }
 
     // --- Confirmation Data ---
