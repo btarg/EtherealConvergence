@@ -1,7 +1,7 @@
 package io.github.btarg.etherealconvergence.config;
 
-import org.apache.commons.lang3.tuple.Pair;
 import net.neoforged.neoforge.common.ModConfigSpec;
+import org.apache.commons.lang3.tuple.Pair;
 
 public class EtherealConvergenceConfig {
     public static final EtherealConvergenceConfig CONFIG;

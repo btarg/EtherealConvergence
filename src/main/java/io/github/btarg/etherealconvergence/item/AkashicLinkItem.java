@@ -1,10 +1,10 @@
 package io.github.btarg.etherealconvergence.item;
 
-import io.github.btarg.etherealconvergence.EtherealConvergence;
 import io.github.btarg.etherealconvergence.config.EtherealConvergenceConfig;
+import io.github.btarg.etherealconvergence.util.ItemHelpers;
+import io.github.btarg.etherealconvergence.util.LinkHelpers;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.component.DataComponentType;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.server.level.ServerLevel;
@@ -25,77 +25,13 @@ import net.minecraft.world.level.Level;
 
 import javax.annotation.Nonnull;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 import java.util.UUID;
-import java.util.stream.Stream;
 
 public class AkashicLinkItem extends Item {
 
     public AkashicLinkItem(Properties props) {
         super(props);
-    }
-
-    /**
-     * Helper function to set a component on an ItemStack.
-     * In creative mode, replaces the ItemStack entirely to ensure proper syncing.
-     */
-    private static <T> void setComponent(ItemStack stack, Player player, DataComponentType<T> component, T value) {
-        if (player.isCreative()) {
-            ItemStack newStack = stack.copy();
-
-            if (!player.level().isClientSide) {
-                newStack.set(component, value);
-            }
-            int slot = player.getInventory().findSlotMatchingItem(stack);
-            player.getInventory().setItem(slot, newStack);
-
-        } else if (!player.level().isClientSide) {
-            stack.set(component, value);
-        }
-    }
-
-    private static <T> void removeComponent(ItemStack stack, Player player, DataComponentType<T> component) {
-        if (player.isCreative()) {
-            ItemStack newStack = stack.copy();
-
-            if (!player.level().isClientSide) {
-                newStack.remove(component);
-            }
-            int slot = player.getInventory().findSlotMatchingItem(stack);
-            player.getInventory().setItem(slot, newStack);
-
-        } else if (!player.level().isClientSide) {
-            stack.remove(component);
-        }
-    }
-
-    private static ItemStack findLinkInHand(Player player) {
-        if (player.getMainHandItem().is(EtherealConvergence.AKASHIC_LINK.get())) {
-            return player.getMainHandItem();
-        }
-        if (player.getOffhandItem().is(EtherealConvergence.AKASHIC_LINK.get())) {
-            return player.getOffhandItem();
-        }
-        return ItemStack.EMPTY;
-    }
-
-    private static ItemStack findLinkedItem(Player player, UUID requesterUUID) {
-        String requesterId = requesterUUID.toString();
-        for (ItemStack s : allStacks(player)) {
-            var data = s.get(ModComponents.LINK.get());
-            if (data != null && requesterId.equals(data.linkedUUID())) {
-                return s;
-            }
-        }
-        return ItemStack.EMPTY;
-    }
-
-    private static List<ItemStack> allStacks(Player player) {
-        return Stream.concat(
-                player.getInventory().items.stream().filter(s -> !s.isEmpty()),
-                player.getInventory().offhand.stream().filter(s -> !s.isEmpty())
-        ).toList();
     }
 
     private static long getCurrentTick() {
@@ -107,7 +43,7 @@ public class AkashicLinkItem extends Item {
         ModComponents.LinkData link = stack.get(ModComponents.LINK.get());
 
         if (link != null && link.linkedUUID().equals(player.getUUID().toString())) {
-            removeComponent(stack, player, ModComponents.LINK.get());
+            ItemHelpers.removeComponent(stack, player, ModComponents.LINK.get());
         }
     }
 
@@ -168,40 +104,21 @@ public class AkashicLinkItem extends Item {
         if (!(entity instanceof Player target))
             return InteractionResult.PASS;
 
-        // Check for self-link and remove it first
-        checkAndRemoveSelfLink(stack, player);
-
-//        // Handle shift-click for request cancellation/unlinking
-//        if (player.isShiftKeyDown()) {
-//            if (player instanceof ServerPlayer serverPlayer) {
-//                removeComponent(stack, player, ModComponents.LINK.get());
-//                sendStatusMessage(serverPlayer, Component.translatable("etherealconvergence.message.unlinked", ""), ChatFormatting.YELLOW);
-//            }
-//
-//            return InteractionResult.sidedSuccess(player.level().isClientSide);
-//        }
 
         ModComponents.LinkData currentLink = stack.get(ModComponents.LINK.get());
         if (currentLink == null) {
             return createLink(stack, player, target);
         }
 
-        // Handle Unlink
-        if (currentLink.linkedUUID().equals(target.getUUID().toString())) {
-            removeComponent(stack, player, ModComponents.LINK.get());
-            sendStatusMessage(player, Component.translatable("etherealconvergence.message.unlinked", target.getGameProfile().getName()), ChatFormatting.YELLOW);
-
-            return InteractionResult.sidedSuccess(player.level().isClientSide);
-        }
 
         // Handle Relink
         ModComponents.ConfirmationData confirmation = stack.get(ModComponents.CONFIRMATION.get());
         if (confirmation != null && confirmation.targetUUID().equals(target.getUUID().toString()) && (System.currentTimeMillis() - confirmation.time() <= EtherealConvergenceConfig.getConfirmationTimeout())) {
-            removeComponent(stack, player, ModComponents.CONFIRMATION.get());
+            ItemHelpers.removeComponent(stack, player, ModComponents.CONFIRMATION.get());
             return createLink(stack, player, target);
         } else {
-            setComponent(stack, player, ModComponents.CONFIRMATION.get(), new ModComponents.ConfirmationData(target.getUUID().toString(), System.currentTimeMillis()));
-            sendStatusMessage(player, Component.translatable("etherealconvergence.message.confirm_relink", target.getGameProfile().getName()), ChatFormatting.YELLOW);
+            ItemHelpers.setComponent(stack, player, ModComponents.CONFIRMATION.get(), new ModComponents.ConfirmationData(target.getUUID().toString(), System.currentTimeMillis()));
+            player.displayClientMessage(Component.translatable("etherealconvergence.message.confirm_relink", target.getGameProfile().getName()).withStyle(ChatFormatting.YELLOW), true);
 
             return InteractionResult.sidedSuccess(player.level().isClientSide);
         }
@@ -210,20 +127,20 @@ public class AkashicLinkItem extends Item {
 
 
     private InteractionResult createLink(ItemStack playerItemStack, Player player, Player target) {
-        ItemStack targetLink = findLinkInHand(target);
+        ItemStack targetLink = LinkHelpers.findLinkInHand(target);
 
         if (targetLink.isEmpty()) {
-            sendStatusMessage(player, Component.translatable("etherealconvergence.message.no_valid_link"), ChatFormatting.RED);
+            player.displayClientMessage(Component.translatable("etherealconvergence.message.no_valid_link").withStyle(ChatFormatting.RED), true);
             return InteractionResult.FAIL;
         }
 
         // Player
-        setComponent(playerItemStack, player, ModComponents.LINK.get(), new ModComponents.LinkData(target.getUUID().toString(), target.getGameProfile().getName()));
-        sendStatusMessage(player, Component.translatable("etherealconvergence.message.linked", target.getGameProfile().getName()), ChatFormatting.GREEN);
+        ItemHelpers.setComponent(playerItemStack, player, ModComponents.LINK.get(), new ModComponents.LinkData(target.getUUID().toString(), target.getGameProfile().getName()));
+        player.displayClientMessage(Component.translatable("etherealconvergence.message.linked", target.getGameProfile().getName()).withStyle(ChatFormatting.GREEN), true);
 
         // Target
-        setComponent(targetLink, target, ModComponents.LINK.get(), new ModComponents.LinkData(player.getUUID().toString(), player.getGameProfile().getName()));
-        sendStatusMessage(target, Component.translatable("etherealconvergence.message.linked", player.getGameProfile().getName()), ChatFormatting.GREEN);
+        ItemHelpers.setComponent(targetLink, target, ModComponents.LINK.get(), new ModComponents.LinkData(player.getUUID().toString(), player.getGameProfile().getName()));
+        target.displayClientMessage(Component.translatable("etherealconvergence.message.linked", player.getGameProfile().getName()).withStyle(ChatFormatting.GREEN), true);
 
 
         return InteractionResult.sidedSuccess(player.level().isClientSide);
@@ -238,10 +155,6 @@ public class AkashicLinkItem extends Item {
         // Check for self-link and remove it first
         checkAndRemoveSelfLink(stack, player);
 
-//        if (player.isShiftKeyDown()) {
-//            return handleShiftClick(stack, player);
-//        }
-
         if (!(player instanceof ServerPlayer serverPlayer)) {
             return InteractionResultHolder.success(stack);
         }
@@ -250,6 +163,12 @@ public class AkashicLinkItem extends Item {
 
         // If we don't have a request then send one
         if (!checkRequestValid(req)) return sendRequest(stack, player);
+
+        // Deny the incoming request if holding shift
+        if (player.isShiftKeyDown()) {
+            player.displayClientMessage(Component.translatable("etherealconvergence.message.request_denied").withStyle(ChatFormatting.RED), true);
+            ItemHelpers.removeComponent(stack, player, ModComponents.INCOMING_REQUEST.get());
+        }
 
         // Bring the requesting player here
         if (req.type().equals(ModComponents.ERequestType.BRING_REQUESTER_HERE)) {
@@ -303,8 +222,8 @@ public class AkashicLinkItem extends Item {
     }
 
     private void handleOfflineFail(ItemStack linkItemStack, Player player) {
-        removeComponent(linkItemStack, player, ModComponents.INCOMING_REQUEST.get());
-        sendStatusMessage(player, Component.translatable("etherealconvergence.message.requester_offline"), ChatFormatting.RED);
+        ItemHelpers.removeComponent(linkItemStack, player, ModComponents.INCOMING_REQUEST.get());
+        player.displayClientMessage(Component.translatable("etherealconvergence.message.offline").withStyle(ChatFormatting.RED), true);
     }
 
     private boolean acceptTeleportToRequest(ModComponents.RequestData requestData, Player acceptingPlayer, ItemStack linkItemStack, Level level) {
@@ -327,12 +246,12 @@ public class AkashicLinkItem extends Item {
 
         // Cast accepting player to ServerPlayer for teleportation
         if (!(acceptingPlayer instanceof ServerPlayer serverAcceptingPlayer)) {
-            removeComponent(linkItemStack, acceptingPlayer, ModComponents.INCOMING_REQUEST.get());
+            ItemHelpers.removeComponent(linkItemStack, acceptingPlayer, ModComponents.INCOMING_REQUEST.get());
             return false;
         }
 
-        sendStatusMessage(requester, Component.translatable("etherealconvergence.message.request_accepted"), ChatFormatting.GREEN);
-        sendStatusMessage(acceptingPlayer, Component.translatable("etherealconvergence.message.tp_success_to", requester.getGameProfile().getName()), ChatFormatting.GREEN);
+        requester.displayClientMessage(Component.translatable("etherealconvergence.message.request_accepted").withStyle(ChatFormatting.GREEN), true);
+        acceptingPlayer.displayClientMessage(Component.translatable("etherealconvergence.message.tp_success_to", requester.getGameProfile().getName()).withStyle(ChatFormatting.GREEN), true);
 
         // Teleport the accepting player to the requester's location
         BlockPos requesterPos = requester.blockPosition();
@@ -342,15 +261,17 @@ public class AkashicLinkItem extends Item {
         serverAcceptingPlayer.lookAt(net.minecraft.commands.arguments.EntityAnchorArgument.Anchor.EYES, requester.getEyePosition());
         serverLevel.playSound(serverAcceptingPlayer, requesterPos, SoundEvents.PLAYER_TELEPORT, SoundSource.PLAYERS, 1.0F, 1.0F);
 
-        removeComponent(linkItemStack, acceptingPlayer, ModComponents.INCOMING_REQUEST.get());
+        ItemHelpers.removeComponent(linkItemStack, acceptingPlayer, ModComponents.INCOMING_REQUEST.get());
 
-        ItemStack requesterLinkStack = findLinkedItem(requester, acceptingPlayer.getUUID());
-        ItemStack acceptingLinkStack = findLinkInHand(acceptingPlayer);
+        ItemStack requesterLinkStack = LinkHelpers.findLinkedItem(requester, acceptingPlayer.getUUID());
+        ItemStack acceptingLinkStack = LinkHelpers.findLinkInHand(acceptingPlayer);
         if (!acceptingLinkStack.isEmpty()) {
             acceptingLinkStack.getItem().damageItem(acceptingLinkStack, 1, serverAcceptingPlayer, p -> {
                 // Sever the link for the requester
-                removeComponent(requesterLinkStack, requester, ModComponents.LINK.get());
-                sendStatusMessage(requester, Component.translatable("etherealconvergence.message.link_broken", acceptingPlayer.getGameProfile().getName()), ChatFormatting.RED);
+                ItemHelpers.removeComponent(requesterLinkStack, requester, ModComponents.LINK.get());
+                requester.displayClientMessage(
+                        Component.translatable("etherealconvergence.message.link_broken",
+                                acceptingPlayer.getGameProfile().getName()).withStyle(ChatFormatting.RED), true);
             });
         }
         serverAcceptingPlayer.getCooldowns().addCooldown(this, EtherealConvergenceConfig.getTeleportCooldownTicks());
@@ -358,71 +279,37 @@ public class AkashicLinkItem extends Item {
         return true;
     }
 
-    private InteractionResultHolder<ItemStack> handleShiftClick(ItemStack stack, Player player) {
-        if (!player.level().isClientSide) {
-            ModComponents.RequestData req = stack.get(ModComponents.INCOMING_REQUEST.get());
-
-            // Cancel any active requests first
-            if (req != null) {
-                ServerPlayer target = Objects.requireNonNull(player.getServer()).getPlayerList().getPlayer(UUID.fromString(req.requester()));
-                if (target != null) {
-                    sendStatusMessage(target, Component.translatable("etherealconvergence.message.request_denied"), ChatFormatting.YELLOW);
-                }
-
-                sendStatusMessage(player, Component.translatable("etherealconvergence.message.request_denied"), ChatFormatting.YELLOW);
-
-                removeComponent(stack, player, ModComponents.INCOMING_REQUEST.get());
-
-                return InteractionResultHolder.sidedSuccess(stack, player.level().isClientSide);
-            }
-            // If no active request, clear the current link
-            if (stack.has(ModComponents.LINK.get())) {
-                ModComponents.LinkData data = stack.get(ModComponents.LINK.get());
-
-                removeComponent(stack, player, ModComponents.LINK.get());
-
-                String linkedPlayerName = (data != null && !data.name().isEmpty()) ? data.name() : "???";
-                sendStatusMessage(player, Component.translatable("etherealconvergence.message.unlinked", linkedPlayerName), ChatFormatting.YELLOW);
-
-                return InteractionResultHolder.sidedSuccess(stack, player.level().isClientSide);
-            }
-        }
-
-        return InteractionResultHolder.sidedSuccess(stack, player.level().isClientSide);
-    }
 
     private InteractionResultHolder<ItemStack> sendRequest(ItemStack linkItemStack, Player player) {
-        ModComponents.LinkData link = linkItemStack.get(ModComponents.LINK.get());
+        ModComponents.LinkData linkData = linkItemStack.get(ModComponents.LINK.get());
 
-        if (link == null) {
-            sendStatusMessage(player, Component.translatable("etherealconvergence.message.not_linked"), ChatFormatting.RED);
+        if (linkData == null) {
+            player.displayClientMessage(Component.translatable("etherealconvergence.message.not_linked").withStyle(ChatFormatting.RED), true);
             return InteractionResultHolder.fail(linkItemStack);
         }
 
-        // Check if server is null to prevent NPE
         if (player.getServer() == null) {
-            sendStatusMessage(player, Component.translatable("etherealconvergence.message.not_linked"), ChatFormatting.RED);
             return InteractionResultHolder.fail(linkItemStack);
         }
 
-        ServerPlayer target = player.getServer().getPlayerList().getPlayer(UUID.fromString(link.linkedUUID()));
+        ServerPlayer target = player.getServer().getPlayerList().getPlayer(UUID.fromString(linkData.linkedUUID()));
         if (target == null) {
-            sendStatusMessage(player, Component.translatable("etherealconvergence.message.target_offline", link.name()), ChatFormatting.RED);
+            player.displayClientMessage(Component.translatable("etherealconvergence.message.offline").withStyle(ChatFormatting.RED), true);
             return InteractionResultHolder.fail(linkItemStack);
         }
 
-        ItemStack targetLink = findLinkedItem(target, player.getUUID());
+        ItemStack targetLink = LinkHelpers.findLinkedItem(target, player.getUUID());
 
         if (targetLink.isEmpty()) {
-            sendStatusMessage(player, Component.translatable("etherealconvergence.message.no_valid_link"), ChatFormatting.RED);
-            removeComponent(linkItemStack, player, ModComponents.LINK.get());
+            player.displayClientMessage(Component.translatable("etherealconvergence.message.no_valid_link").withStyle(ChatFormatting.RED), true);
+            ItemHelpers.removeComponent(linkItemStack, player, ModComponents.LINK.get());
             return InteractionResultHolder.fail(linkItemStack);
         }
 
 
         ModComponents.RequestData requestData = targetLink.get(ModComponents.INCOMING_REQUEST.get());
         if (checkRequestValid(requestData)) {
-            sendStatusMessage(player, Component.translatable("etherealconvergence.message.request_pending"), ChatFormatting.YELLOW);
+            player.displayClientMessage(Component.translatable("etherealconvergence.message.request_pending").withStyle(ChatFormatting.YELLOW), true);
             return InteractionResultHolder.fail(linkItemStack);
         }
 
@@ -436,16 +323,14 @@ public class AkashicLinkItem extends Item {
                 ModComponents.ERequestType.TP_TO_REQUESTER
                 : ModComponents.ERequestType.BRING_REQUESTER_HERE;
 
-        setComponent(targetLink, target, ModComponents.INCOMING_REQUEST.get(), new ModComponents.RequestData(player.getUUID().toString(), getCurrentTick(), requestType));
+        ItemHelpers.setComponent(targetLink, target, ModComponents.INCOMING_REQUEST.get(), new ModComponents.RequestData(player.getUUID().toString(), getCurrentTick(), requestType));
+        serverPlayer.displayClientMessage(Component.translatable("etherealconvergence.message.request_sent", linkData.name()).withStyle(ChatFormatting.GREEN), true);
 
-        sendStatusMessage(serverPlayer, Component.translatable("etherealconvergence.message.request_sent", link.name()), ChatFormatting.GREEN);
+        String messageKey = requestType.equals(ModComponents.ERequestType.BRING_REQUESTER_HERE) ?
+                "etherealconvergence.message.request_incoming"
+                : "etherealconvergence.message.request_incoming_tp";
 
-        if (requestType.equals(ModComponents.ERequestType.BRING_REQUESTER_HERE)) {
-            sendStatusMessage(target, Component.translatable("etherealconvergence.message.request_incoming", player.getGameProfile().getName()), ChatFormatting.AQUA);
-        } else {
-            sendStatusMessage(target, Component.translatable("etherealconvergence.message.request_incoming_tp", player.getGameProfile().getName()), ChatFormatting.AQUA);
-        }
-
+        target.displayClientMessage(Component.translatable(messageKey, player.getGameProfile().getName()).withStyle(ChatFormatting.AQUA), true);
 
         serverPlayer.getCooldowns().addCooldown(linkItemStack.getItem(), EtherealConvergenceConfig.getRequestTimeoutTicks());
 
@@ -461,36 +346,35 @@ public class AkashicLinkItem extends Item {
     private boolean acceptTeleportHereRequest(ModComponents.RequestData requestData, Player acceptingPlayer, ItemStack linkItemStack, Level level, BlockPos pos) {
 
         if (!(level instanceof ServerLevel serverLevel)) {
-            sendStatusMessage(acceptingPlayer, Component.translatable("etherealconvergence.message.requester_offline"), ChatFormatting.RED);
-            removeComponent(linkItemStack, acceptingPlayer, ModComponents.INCOMING_REQUEST.get());
+            acceptingPlayer.displayClientMessage(Component.translatable("etherealconvergence.message.offline").withStyle(ChatFormatting.RED), true);
+            ItemHelpers.removeComponent(linkItemStack, acceptingPlayer, ModComponents.INCOMING_REQUEST.get());
             return false;
         }
 
         ServerPlayer requester = serverLevel.getServer().getPlayerList().getPlayer(UUID.fromString(requestData.requester()));
         if (requester == null) {
-            removeComponent(linkItemStack, acceptingPlayer, ModComponents.INCOMING_REQUEST.get());
-            sendStatusMessage(acceptingPlayer, Component.translatable("etherealconvergence.message.requester_offline"), ChatFormatting.RED);
+            ItemHelpers.removeComponent(linkItemStack, acceptingPlayer, ModComponents.INCOMING_REQUEST.get());
+            acceptingPlayer.displayClientMessage(Component.translatable("etherealconvergence.message.offline").withStyle(ChatFormatting.RED), true);
             return false;
         }
 
-        sendStatusMessage(requester, Component.translatable("etherealconvergence.message.tp_success_to", acceptingPlayer.getGameProfile().getName()), ChatFormatting.GREEN);
-        sendStatusMessage(acceptingPlayer, Component.translatable("etherealconvergence.message.request_accepted"), ChatFormatting.GREEN);
+        requester.displayClientMessage(Component.translatable("etherealconvergence.message.tp_success_to", acceptingPlayer.getGameProfile().getName()).withStyle(ChatFormatting.GREEN), true);
+        acceptingPlayer.displayClientMessage(Component.translatable("etherealconvergence.message.request_accepted").withStyle(ChatFormatting.GREEN), true);
 
         // Empty set provided to avoid interpolation when teleporting
         requester.teleportTo(serverLevel, pos.getX(), pos.getY(), pos.getZ(), Set.of(), requester.getYRot(), requester.getXRot());
         requester.lookAt(net.minecraft.commands.arguments.EntityAnchorArgument.Anchor.EYES, acceptingPlayer.getEyePosition());
         level.playSound(requester, pos, SoundEvents.PLAYER_TELEPORT, SoundSource.PLAYERS, 1.0F, 1.0F);
 
-        removeComponent(linkItemStack, acceptingPlayer, ModComponents.INCOMING_REQUEST.get());
+        ItemHelpers.removeComponent(linkItemStack, acceptingPlayer, ModComponents.INCOMING_REQUEST.get());
 
-        ItemStack requesterLinkStack = findLinkedItem(requester, acceptingPlayer.getUUID());
-        ItemStack acceptingLinkStack = findLinkInHand(acceptingPlayer);
+        ItemStack requesterLinkStack = LinkHelpers.findLinkedItem(requester, acceptingPlayer.getUUID());
+        ItemStack acceptingLinkStack = LinkHelpers.findLinkInHand(acceptingPlayer);
         if (!requesterLinkStack.isEmpty()) {
             requesterLinkStack.getItem().damageItem(requesterLinkStack, 1, requester, p -> {
                 // Sever the link for the acceptingPlayer
-                removeComponent(acceptingLinkStack, acceptingPlayer, ModComponents.LINK.get());
-                sendStatusMessage(acceptingPlayer, Component.translatable("etherealconvergence.message.link_broken", requester.getGameProfile().getName()), ChatFormatting.RED);
-
+                ItemHelpers.removeComponent(acceptingLinkStack, acceptingPlayer, ModComponents.LINK.get());
+                acceptingPlayer.displayClientMessage(Component.translatable("etherealconvergence.message.link_broken", requester.getGameProfile().getName()).withStyle(ChatFormatting.RED), true);
             });
         }
         requester.getCooldowns().addCooldown(this, EtherealConvergenceConfig.getTeleportCooldownTicks());
@@ -504,7 +388,4 @@ public class AkashicLinkItem extends Item {
         return repairCandidate.is(Items.ENDER_PEARL);
     }
 
-    private void sendStatusMessage(Player player, Component message, ChatFormatting color) {
-        player.displayClientMessage(message.copy().withStyle(color), true);
-    }
 }
