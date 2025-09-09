@@ -110,8 +110,11 @@ public class AkashicLinkItem extends Item {
             return createLink(stack, player, target);
         }
 
-
         // Handle Relink
+        if (currentLink.linkedUUID().equals(target.getUUID().toString())) {
+            return InteractionResult.sidedSuccess(player.level().isClientSide);
+        }
+
         ModComponents.ConfirmationData confirmation = stack.get(ModComponents.CONFIRMATION.get());
         if (confirmation != null && confirmation.targetUUID().equals(target.getUUID().toString()) && (System.currentTimeMillis() - confirmation.time() <= EtherealConvergenceConfig.getConfirmationTimeout())) {
             ItemHelpers.removeComponent(stack, player, ModComponents.CONFIRMATION.get());
@@ -210,14 +213,14 @@ public class AkashicLinkItem extends Item {
             if (!Level.isInSpawnableBounds(newPos)) return InteractionResult.FAIL;
 
             return acceptTeleportHereRequest(req, player, stack, level, newPos)
-                    ? InteractionResult.sidedSuccess(player.level().isClientSide)
+                    ? InteractionResult.SUCCESS
                     : InteractionResult.FAIL;
 
         }
 
         // Go to the requesting player
         return acceptTeleportToRequest(req, player, stack, level)
-                ? InteractionResult.sidedSuccess(player.level().isClientSide)
+                ? InteractionResult.SUCCESS
                 : InteractionResult.FAIL;
     }
 
