@@ -16,6 +16,8 @@ import java.util.function.Supplier;
 public class ModComponents {
     public static final DeferredRegister.DataComponents REGISTER =
             DeferredRegister.createDataComponents(Registries.DATA_COMPONENT_TYPE, EtherealConvergence.MODID);
+
+
     public static final Codec<LinkData> LINK_CODEC = RecordCodecBuilder.create(instance -> instance.group(
             Codec.STRING.fieldOf("linkedUUID").forGetter(LinkData::linkedUUID),
             Codec.STRING.fieldOf("name").forGetter(LinkData::name)
@@ -27,7 +29,7 @@ public class ModComponents {
             LinkData::new
     );
 
-    public static final Supplier<DataComponentType<LinkData>> LINK =
+    public static final Supplier<DataComponentType<LinkData>> LINK_DATA =
             REGISTER.registerComponentType("link", builder -> builder
                     .persistent(LINK_CODEC)
                     .networkSynchronized(LINK_STREAM_CODEC));
@@ -53,15 +55,18 @@ public class ModComponents {
             REGISTER.registerComponentType("request", builder -> builder
                     .persistent(REQUEST_CODEC)
                     .networkSynchronized(REQUEST_STREAM_CODEC));
+
     public static final Codec<ConfirmationData> CONFIRMATION_CODEC = RecordCodecBuilder.create(inst -> inst.group(
             Codec.STRING.fieldOf("targetUUID").forGetter(ConfirmationData::targetUUID),
             Codec.LONG.fieldOf("time").forGetter(ConfirmationData::time)
     ).apply(inst, ConfirmationData::new));
+
     public static final StreamCodec<ByteBuf, ConfirmationData> CONFIRMATION_STREAM_CODEC = StreamCodec.composite(
             ByteBufCodecs.STRING_UTF8, ConfirmationData::targetUUID,
             ByteBufCodecs.VAR_LONG, ConfirmationData::time,
             ConfirmationData::new
     );
+
     public static final Supplier<DataComponentType<ConfirmationData>> CONFIRMATION =
             REGISTER.registerComponentType("confirmation", builder -> builder
                     .persistent(CONFIRMATION_CODEC)
@@ -87,14 +92,12 @@ public class ModComponents {
         }
     }
 
-    // --- Link Data ---
     public record LinkData(String linkedUUID, String name) {
     }
 
     public record RequestData(String requesterUUID, long time, ERequestType type, BlockPos blockPos) {
     }
 
-    // --- Confirmation Data ---
     public record ConfirmationData(String targetUUID, long time) {
     }
 

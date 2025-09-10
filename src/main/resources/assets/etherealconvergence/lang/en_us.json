@@ -18,5 +18,7 @@
   "etherealconvergence.message.request_denied": "Teleport request denied.",
   "etherealconvergence.message.confirm_relink": "Interact again to re-link with %s.",
   "etherealconvergence.message.link_broken": "Your link to %s was broken.",
+  "etherealconvergence.message.link_request_sent": "Request to link with %s sent.",
+  "etherealconvergence.message.link_request_received": "Interact with %s to link.",
   "key.etherealconvergence.unlink": "Clear Akashic Link"
 }

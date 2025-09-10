@@ -16,7 +16,10 @@ public class ItemHelpers {
                 newStack.remove(component);
             }
             int slot = player.getInventory().findSlotMatchingItem(stack);
-            player.getInventory().setItem(slot, newStack);
+
+            if (slot > -1) {
+                player.getInventory().setItem(slot, newStack);
+            }
 
         } else if (!player.level().isClientSide) {
             stack.remove(component);

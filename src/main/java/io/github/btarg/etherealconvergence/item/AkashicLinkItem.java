@@ -42,7 +42,7 @@ public class AkashicLinkItem extends Item {
     }
 
     private static void checkAndRemoveSelfLink(ItemStack stack, Player player) {
-        ModComponents.LinkData link = stack.get(ModComponents.LINK.get());
+        ModComponents.LinkData link = stack.get(ModComponents.LINK_DATA.get());
         if (link != null && link.linkedUUID().equals(player.getUUID().toString())) {
             LinkHelpers.unlink(stack, player);
         }
@@ -55,8 +55,8 @@ public class AkashicLinkItem extends Item {
         String targetName = "You"; // The current player holding the item
 
         return requestData.type() == ModComponents.ERequestType.BRING_REQUESTER_HERE
-                ? requesterName + " -> " + targetName
-                : targetName + " -> " + requesterName;
+                ? requesterName + " → " + targetName
+                : targetName + " → " + requesterName;
     }
 
     private boolean hasValidRequestTicksClient(ItemStack stack) {
@@ -78,7 +78,7 @@ public class AkashicLinkItem extends Item {
     @Override
     @Nonnull
     public Component getName(@Nonnull ItemStack stack) {
-        ModComponents.LinkData link = stack.get(ModComponents.LINK.get());
+        ModComponents.LinkData link = stack.get(ModComponents.LINK_DATA.get());
 
         ChatFormatting style;
         if (link == null) {
@@ -94,7 +94,7 @@ public class AkashicLinkItem extends Item {
     public void appendHoverText(@Nonnull ItemStack stack, @Nonnull TooltipContext context, @Nonnull List<Component> tooltipComponents, @Nonnull TooltipFlag tooltipFlag) {
 
         ModComponents.RequestData req = stack.get(ModComponents.INCOMING_REQUEST.get());
-        ModComponents.LinkData link = stack.get(ModComponents.LINK.get());
+        ModComponents.LinkData link = stack.get(ModComponents.LINK_DATA.get());
 
         if (hasValidRequestTicksClient(stack)) {
             String teleportString = getTeleportString(req, link);
@@ -111,54 +111,66 @@ public class AkashicLinkItem extends Item {
         super.appendHoverText(stack, context, tooltipComponents, tooltipFlag);
     }
 
-    // Right-click entity to bind/unbind
+    // Right-click player to start a link request
     @Override
     @Nonnull
     public InteractionResult interactLivingEntity(@Nonnull ItemStack stack, @Nonnull Player player, @Nonnull LivingEntity entity, @Nonnull InteractionHand hand) {
         if (!(entity instanceof Player target))
             return InteractionResult.PASS;
 
-
-        ModComponents.LinkData currentLink = stack.get(ModComponents.LINK.get());
-        if (currentLink == null) {
-            return createLink(stack, player, target);
-        }
-
-        // Handle Relink
-        if (currentLink.linkedUUID().equals(target.getUUID().toString())) {
-            return InteractionResult.sidedSuccess(player.level().isClientSide);
-        }
-
-        ModComponents.ConfirmationData confirmation = stack.get(ModComponents.CONFIRMATION.get());
-        if (confirmation != null && confirmation.targetUUID().equals(target.getUUID().toString()) && (System.currentTimeMillis() - confirmation.time() <= EtherealConvergenceConfig.getConfirmationTimeout())) {
-            ItemHelpers.removeComponent(stack, player, ModComponents.CONFIRMATION.get());
-            return createLink(stack, player, target);
-        } else {
-            ItemHelpers.setComponent(stack, player, ModComponents.CONFIRMATION.get(), new ModComponents.ConfirmationData(target.getUUID().toString(), System.currentTimeMillis()));
-            player.displayClientMessage(Component.translatable("etherealconvergence.message.confirm_relink", target.getGameProfile().getName()).withStyle(ChatFormatting.YELLOW), true);
-
-            return InteractionResult.sidedSuccess(player.level().isClientSide);
-        }
-
-    }
-
-
-    private InteractionResult createLink(ItemStack playerItemStack, Player player, Player target) {
         ItemStack targetLink = LinkHelpers.findLinkInHand(target);
-
         if (targetLink.isEmpty()) {
             player.displayClientMessage(Component.translatable("etherealconvergence.message.no_valid_link").withStyle(ChatFormatting.RED), true);
             return InteractionResult.FAIL;
         }
 
-        // Player
-        ItemHelpers.setComponent(playerItemStack, player, ModComponents.LINK.get(), new ModComponents.LinkData(target.getUUID().toString(), target.getGameProfile().getName()));
+        ModComponents.LinkData currentLink = stack.get(ModComponents.LINK_DATA.get());
+
+        // If already linked to this player, unlink
+        if (currentLink != null && currentLink.linkedUUID().equals(target.getUUID().toString())) {
+            LinkHelpers.unlink(stack, player);
+            LinkHelpers.unlink(targetLink, target);
+            player.displayClientMessage(Component.translatable("etherealconvergence.message.unlinked", target.getGameProfile().getName()).withStyle(ChatFormatting.YELLOW), true);
+            target.displayClientMessage(Component.translatable("etherealconvergence.message.unlinked", player.getGameProfile().getName()).withStyle(ChatFormatting.YELLOW), true);
+            return InteractionResult.sidedSuccess(player.level().isClientSide);
+        }
+
+        // Check if target wants to link with us
+        ModComponents.ConfirmationData targetConfirmation = targetLink.get(ModComponents.CONFIRMATION.get());
+        boolean targetWantsToLink = targetConfirmation != null && 
+            targetConfirmation.targetUUID().equals(player.getUUID().toString()) && 
+            (System.currentTimeMillis() - targetConfirmation.time() <= EtherealConvergenceConfig.getConfirmationTimeout());
+
+        if (targetWantsToLink) {
+            return createMutualLink(stack, player, target, targetLink);
+        }
+
+        // Send link request
+        ItemHelpers.setComponent(stack, player, ModComponents.CONFIRMATION.get(), 
+            new ModComponents.ConfirmationData(target.getUUID().toString(), System.currentTimeMillis()));
+        
+        player.displayClientMessage(Component.translatable("etherealconvergence.message.link_request_sent", target.getGameProfile().getName()).withStyle(ChatFormatting.YELLOW), true);
+        target.displayClientMessage(Component.translatable("etherealconvergence.message.link_request_received", player.getGameProfile().getName()).withStyle(ChatFormatting.AQUA), true);
+
+        return InteractionResult.sidedSuccess(player.level().isClientSide);
+    }
+
+
+    private InteractionResult createMutualLink(ItemStack playerItemStack, Player player, Player target, ItemStack targetItemStack) {
+        
+        // Create the mutual link
+        ItemHelpers.setComponent(playerItemStack, player, ModComponents.LINK_DATA.get(), 
+            new ModComponents.LinkData(target.getUUID().toString(), target.getGameProfile().getName()));
+        ItemHelpers.setComponent(targetItemStack, target, ModComponents.LINK_DATA.get(), 
+            new ModComponents.LinkData(player.getUUID().toString(), player.getGameProfile().getName()));
+
+        // Clear confirmations
+        ItemHelpers.removeComponent(playerItemStack, player, ModComponents.CONFIRMATION.get());
+        ItemHelpers.removeComponent(targetItemStack, target, ModComponents.CONFIRMATION.get());
+
+        // Notify both players
         player.displayClientMessage(Component.translatable("etherealconvergence.message.linked", target.getGameProfile().getName()).withStyle(ChatFormatting.GREEN), true);
-
-        // Target
-        ItemHelpers.setComponent(targetLink, target, ModComponents.LINK.get(), new ModComponents.LinkData(player.getUUID().toString(), player.getGameProfile().getName()));
         target.displayClientMessage(Component.translatable("etherealconvergence.message.linked", player.getGameProfile().getName()).withStyle(ChatFormatting.GREEN), true);
-
 
         return InteractionResult.sidedSuccess(player.level().isClientSide);
     }
@@ -181,14 +193,18 @@ public class AkashicLinkItem extends Item {
         // If we don't have a request then send one
         if (!checkRequestValid(req)) return sendRequest(stack, player, player.blockPosition());
 
+        // At this point, req is guaranteed to be non-null due to checkRequestValid
+        assert req != null;
+
         // Deny the incoming request if holding shift
         if (player.isShiftKeyDown()) {
             player.displayClientMessage(Component.translatable("etherealconvergence.message.request_denied").withStyle(ChatFormatting.RED), true);
             ItemHelpers.removeComponent(stack, player, ModComponents.INCOMING_REQUEST.get());
+            return InteractionResultHolder.success(stack);
         }
 
         // Bring the requesting player here
-        if (req.type().equals(ModComponents.ERequestType.BRING_REQUESTER_HERE)) {
+        if (req != null && req.type().equals(ModComponents.ERequestType.BRING_REQUESTER_HERE)) {
             return acceptBringRequesterHere(req, serverPlayer, stack, serverPlayer.serverLevel(), serverPlayer.blockPosition())
                     ? InteractionResultHolder.sidedSuccess(stack, player.level().isClientSide)
                     : InteractionResultHolder.fail(stack);
@@ -298,7 +314,7 @@ public class AkashicLinkItem extends Item {
 
 
     private InteractionResultHolder<ItemStack> sendRequest(ItemStack linkItemStack, Player player, BlockPos blockPos) {
-        ModComponents.LinkData linkData = linkItemStack.get(ModComponents.LINK.get());
+        ModComponents.LinkData linkData = linkItemStack.get(ModComponents.LINK_DATA.get());
 
         if (linkData == null) {
             player.displayClientMessage(Component.translatable("etherealconvergence.message.not_linked").withStyle(ChatFormatting.RED), true);

@@ -15,18 +15,18 @@ import java.util.UUID;
 public class LinkHelpers {
 
     public static void unlink(ItemStack stack, Player player) {
-        ModComponents.LinkData data = stack.get(ModComponents.LINK.get());
+        ModComponents.LinkData data = stack.get(ModComponents.LINK_DATA.get());
         if (data == null) {
             return;
         }
 
-        ItemHelpers.removeComponent(stack, player, ModComponents.LINK.get());
+        ItemHelpers.removeComponent(stack, player, ModComponents.LINK_DATA.get());
         String linkedPlayerName = data.name();
         player.displayClientMessage(Component.translatable("etherealconvergence.message.unlinked", linkedPlayerName).withStyle(ChatFormatting.YELLOW), true);
     }
 
     public static void unlinkBoth(ItemStack stack, Player player) {
-        ModComponents.LinkData data = stack.get(ModComponents.LINK.get());
+        ModComponents.LinkData data = stack.get(ModComponents.LINK_DATA.get());
 
         if (data == null) {
             return;
@@ -43,7 +43,7 @@ public class LinkHelpers {
 
         if (linkedPlayer != null) {
             ItemStack linkedStack = findLinkedItem(linkedPlayer, serverPlayer.getUUID());
-            ItemHelpers.removeComponent(linkedStack, linkedPlayer, ModComponents.LINK.get());
+            ItemHelpers.removeComponent(linkedStack, linkedPlayer, ModComponents.LINK_DATA.get());
             message_players.add(linkedPlayer);
         }
 
@@ -51,7 +51,7 @@ public class LinkHelpers {
             p.displayClientMessage(Component.translatable("etherealconvergence.message.link_broken", player.getDisplayName()).withStyle(ChatFormatting.YELLOW), true);
         }
 
-        ItemHelpers.removeComponent(stack, player, ModComponents.LINK.get());
+        ItemHelpers.removeComponent(stack, player, ModComponents.LINK_DATA.get());
     }
 
     public static ItemStack findLinkInHand(Player player) {
@@ -67,7 +67,7 @@ public class LinkHelpers {
     public static ItemStack findLinkedItem(Player player, UUID matchingUuid) {
         String requesterId = matchingUuid.toString();
         for (ItemStack s : ItemHelpers.getAllItemStacks(player)) {
-            var data = s.get(ModComponents.LINK.get());
+            var data = s.get(ModComponents.LINK_DATA.get());
             if (data != null && requesterId.equals(data.linkedUUID())) {
                 return s;
             }
