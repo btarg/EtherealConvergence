@@ -343,8 +343,8 @@ public class AkashicLinkItem extends Item {
                 new ModComponents.RequestData(player.getUUID().toString(), getCurrentTimeInTicks(), requestType));
 
         String requestSentMessage = requestType == ModComponents.ERequestType.BRING_REQUESTER_HERE
-                ? "etherealconvergence.message.request_sent_tpa_here"
-                : "etherealconvergence.message.request_sent_tpa";
+                ? "etherealconvergence.message.request_sent_tpa"
+                : "etherealconvergence.message.request_sent_tpa_here";
         serverPlayer.displayClientMessage(Component.translatable(requestSentMessage, linkData.name()).withStyle(ChatFormatting.GREEN), true);
 
         String incomingRequestMessage = requestType == ModComponents.ERequestType.BRING_REQUESTER_HERE
