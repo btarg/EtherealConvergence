@@ -93,18 +93,23 @@ public class AkashicLinkItem extends Item {
     @Override
     public void appendHoverText(@Nonnull ItemStack stack, @Nonnull TooltipContext context, @Nonnull List<Component> tooltipComponents, @Nonnull TooltipFlag tooltipFlag) {
 
-        ModComponents.RequestData req = stack.get(ModComponents.INCOMING_REQUEST.get());
-        ModComponents.LinkData link = stack.get(ModComponents.LINK_DATA.get());
+        ModComponents.RequestData requestData = stack.get(ModComponents.INCOMING_REQUEST.get());
+        ModComponents.LinkData linkData = stack.get(ModComponents.LINK_DATA.get());
+        ModComponents.ConfirmationData conformation = stack.get(ModComponents.CONFIRMATION.get());
 
         if (hasValidRequestTicksClient(stack)) {
-            String teleportString = getTeleportString(req, link);
+            String teleportString = getTeleportString(requestData, linkData);
             tooltipComponents.add(Component.translatable("item.etherealconvergence.incoming", teleportString).withStyle(ChatFormatting.DARK_PURPLE));
         }
+        else if (conformation != null) {
+            String linkingPlayerName = conformation.targetUUID().isEmpty() ? "???" : conformation.targetUUID();
+            tooltipComponents.add(Component.translatable("etherealconvergence.message.link_pending", "You ⇄ " + linkingPlayerName).withStyle(ChatFormatting.BLUE));
+        }
 
-        boolean noLink = link == null || link.linkedUUID().isEmpty();
+        boolean noLink = linkData == null || linkData.linkedUUID().isEmpty();
         MutableComponent linkName = noLink ?
                 Component.translatable("item.etherealconvergence.unlinked")
-                : Component.translatable("etherealconvergence.message.linked", link.name());
+                : Component.translatable("etherealconvergence.message.linked", linkData.name());
 
         tooltipComponents.add(linkName.withStyle(ChatFormatting.BLUE));
 
@@ -122,17 +127,6 @@ public class AkashicLinkItem extends Item {
         if (targetLink.isEmpty()) {
             player.displayClientMessage(Component.translatable("etherealconvergence.message.no_valid_link").withStyle(ChatFormatting.RED), true);
             return InteractionResult.FAIL;
-        }
-
-        ModComponents.LinkData currentLink = stack.get(ModComponents.LINK_DATA.get());
-
-        // If already linked to this player, unlink
-        if (currentLink != null && currentLink.linkedUUID().equals(target.getUUID().toString())) {
-            LinkHelpers.unlink(stack, player);
-            LinkHelpers.unlink(targetLink, target);
-            player.displayClientMessage(Component.translatable("etherealconvergence.message.unlinked", target.getGameProfile().getName()).withStyle(ChatFormatting.YELLOW), true);
-            target.displayClientMessage(Component.translatable("etherealconvergence.message.unlinked", player.getGameProfile().getName()).withStyle(ChatFormatting.YELLOW), true);
-            return InteractionResult.sidedSuccess(player.level().isClientSide);
         }
 
         // Check if target wants to link with us
@@ -193,8 +187,6 @@ public class AkashicLinkItem extends Item {
         // If we don't have a request then send one
         if (!checkRequestValid(req)) return sendRequest(stack, player, player.blockPosition());
 
-        // At this point, req is guaranteed to be non-null due to checkRequestValid
-        assert req != null;
 
         // Deny the incoming request if holding shift
         if (player.isShiftKeyDown()) {
